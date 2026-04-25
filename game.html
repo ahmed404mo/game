@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>أبطال البيئة - مهمة الإنقاذ (3 مستويات)</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Baloo+Bhaijaan+2:wght@400;600;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Baloo Bhaijaan 2', sans-serif;
+            margin: 0;
+            overflow: hidden; 
+            background-color: #4a4a4a; 
+            touch-action: none; 
+        }
+
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+            cursor: pointer; 
+        }
+
+        #game-ui {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            pointer-events: none; 
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .interactive-ui {
+            pointer-events: auto;
+        }
+
+        .d-pad-btn {
+            width: 50px;
+            height: 50px;
+            background: rgba(255, 255, 255, 0.8);
+            border: 3px solid #4ade80;
+            border-radius: 12px;
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #16a34a;
+            user-select: none;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .d-pad-btn:active {
+            background: #4ade80;
+            color: white;
+            transform: scale(0.95);
+        }
+
+        .modal-overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.8);
+            z-index: 50;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.5s;
+        }
+        .modal-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-ui">
+        
+        <!-- الشريط العلوي -->
+        <header class="interactive-ui flex justify-between items-center p-3 bg-white/90 backdrop-blur shadow-md rounded-b-3xl mx-2 md:mx-4 mt-0 border-b-4 border-green-400">
+            <div class="flex-1">
+                <h1 class="text-xl md:text-2xl font-extrabold text-green-600 flex items-center gap-2">
+                    أبطال الإنقاذ 🌍 
+                    <span id="level-badge" class="text-sm bg-green-200 text-green-800 px-3 py-1 rounded-full shadow-inner">المستوى 1</span>
+                </h1>
+                <div class="text-xs md:text-sm font-bold text-gray-500 flex gap-4 mt-1">
+                    <span id="trash-counter" class="text-amber-600">🗑️ قمامة متبقية: 10</span>
+                    <span id="tree-counter" class="text-green-600">🌳 أشجار: 0/5</span>
+                </div>
+            </div>
+            
+            <div class="text-center px-4 py-2 bg-blue-50 rounded-2xl border-2 border-blue-300 ml-2 shadow-inner">
+                <span class="block text-xs text-blue-800 font-bold">الهدف</span>
+                <span class="block text-sm font-extrabold text-blue-600">أنقذ الطبيعة!</span>
+            </div>
+        </header>
+
+        <!-- إشعار الأخطاء -->
+        <div id="alert-msg" class="absolute top-1/4 left-1/2 transform -translate-x-1/2 bg-red-500 text-white px-6 py-2 rounded-full font-bold shadow-lg opacity-0 transition-opacity z-20 pointer-events-none">
+            يجب حرث الأرض (طين) أولاً!
+        </div>
+
+        <!-- منطقة الأزرار السفلية -->
+        <div class="interactive-ui flex justify-between items-end p-4 pb-6">
+            
+            <div class="grid grid-cols-3 gap-1 w-40 opacity-80 md:opacity-50 hover:opacity-100 transition-opacity">
+                <div></div>
+                <button class="d-pad-btn" id="btn-up">⬆️</button>
+                <div></div>
+                <button class="d-pad-btn" id="btn-left">⬅️</button>
+                <button class="d-pad-btn" id="btn-down">⬇️</button>
+                <button class="d-pad-btn" id="btn-right">➡️</button>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 md:gap-4">
+                <button onclick="useTool('clean')" class="w-16 h-16 md:w-20 md:h-20 bg-amber-500 rounded-2xl border-b-4 border-amber-700 shadow-lg flex flex-col items-center justify-center hover:bg-amber-400 active:translate-y-1 active:border-b-0 transition-all">
+                    <span class="text-2xl md:text-3xl">🧹</span>
+                    <span class="text-white font-bold text-xs mt-1">نظف</span>
+                </button>
+                <button onclick="useTool('dig')" class="w-16 h-16 md:w-20 md:h-20 bg-cyan-700 rounded-2xl border-b-4 border-cyan-900 shadow-lg flex flex-col items-center justify-center hover:bg-cyan-600 active:translate-y-1 active:border-b-0 transition-all">
+                    <span class="text-2xl md:text-3xl">⛏️</span>
+                    <span class="text-white font-bold text-xs mt-1">احرث</span>
+                </button>
+                <button onclick="useTool('plant')" class="w-16 h-16 md:w-20 md:h-20 bg-green-500 rounded-2xl border-b-4 border-green-700 shadow-lg flex flex-col items-center justify-center hover:bg-green-400 active:translate-y-1 active:border-b-0 transition-all">
+                    <span class="text-2xl md:text-3xl">🌱</span>
+                    <span class="text-white font-bold text-xs mt-1">إزرع</span>
+                </button>
+                <button onclick="useTool('water')" class="w-16 h-16 md:w-20 md:h-20 bg-blue-500 rounded-2xl border-b-4 border-blue-700 shadow-lg flex flex-col items-center justify-center hover:bg-blue-400 active:translate-y-1 active:border-b-0 transition-all">
+                    <span class="text-2xl md:text-3xl">💧</span>
+                    <span class="text-white font-bold text-xs mt-1">إسقي</span>
+                </button>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- شاشة الفوز بالمستوى أو اللعبة -->
+    <div id="result-modal" class="modal-overlay">
+        <div class="bg-white p-8 rounded-3xl text-center max-w-md mx-4 shadow-2xl transform scale-105">
+            <h2 id="result-title" class="text-4xl font-extrabold mb-4 text-green-600">🎉 مبروك يا بطل!</h2>
+            <p id="result-desc" class="text-gray-600 text-lg font-bold mb-6">نجحت في تنظيف المنطقة بالكامل!</p>
+            <button id="result-btn" class="w-full py-4 bg-green-500 text-white text-xl font-bold rounded-xl shadow-md hover:bg-green-400 transition-colors">
+                المستوى التالي ➡️
+            </button>
+        </div>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <script>
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        let audioCtx;
+
+        function initAudio() {
+            if (!audioCtx) audioCtx = new AudioContext();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+        }
+
+        function playSound(type) {
+            try {
+                initAudio();
+                const osc = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                osc.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+                
+                if (type === 'plant' || type === 'dig') {
+                    osc.type = 'square';
+                    osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(50, audioCtx.currentTime + 0.1);
+                    gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+                    osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+                } 
+                else if (type === 'clean') {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(400, audioCtx.currentTime);
+                    osc.frequency.linearRampToValueAtTime(600, audioCtx.currentTime + 0.1);
+                    gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                    gainNode.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+                    osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+                }
+                else if (type === 'water') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(200, audioCtx.currentTime + 0.15);
+                    gainNode.gain.setValueAtTime(0.4, audioCtx.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+                    osc.start(); osc.stop(audioCtx.currentTime + 0.15);
+                }
+                else if (type === 'error') {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+                    osc.frequency.setValueAtTime(100, audioCtx.currentTime + 0.1);
+                    gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+                    osc.start(); osc.stop(audioCtx.currentTime + 0.3);
+                }
+                else if (type === 'levelUp') {
+                    const notes = [440, 554.37, 659.25, 880]; 
+                    notes.forEach((freq, index) => {
+                        setTimeout(() => {
+                            const osc2 = audioCtx.createOscillator();
+                            const gain2 = audioCtx.createGain();
+                            osc2.connect(gain2);
+                            gain2.connect(audioCtx.destination);
+                            osc2.type = 'triangle';
+                            osc2.frequency.value = freq;
+                            gain2.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                            gain2.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+                            osc2.start(); osc2.stop(audioCtx.currentTime + 0.4);
+                        }, index * 80);
+                    });
+                }
+            } catch (e) {}
+        }
+
+        function showAlert(msg) {
+            playSound('error');
+            const alertBox = document.getElementById('alert-msg');
+            alertBox.innerText = msg;
+            alertBox.style.opacity = '1';
+            setTimeout(() => { alertBox.style.opacity = '0'; }, 2500);
+        }
+    </script>
+
+    <script>
+        // إعدادات المستويات (3 مستويات)
+        const levelsConfig = [
+            { trees: 5, trash: 10 },
+            { trees: 10, trash: 15 },
+            { trees: 15, trash: 20 }
+        ];
+
+        let currentLevel = 1;
+        const MAX_LEVELS = 3;
+        
+        let targetTrees = levelsConfig[0].trees;
+        let initialTrash = levelsConfig[0].trash;
+
+        let scene, camera, renderer;
+        let playerGroup, targetMarker, groundMat;
+        let raycaster, mouse;
+        
+        let treesData = []; 
+        let treeMeshes = []; 
+        let trashMeshes = [];
+        let soilMeshes = []; // تحويل المياه إلى طين (تربة محروثة)
+        
+        const deadSkyColor = new THREE.Color(0x303030); 
+        const aliveSkyColor = new THREE.Color(0x87CEEB); 
+        const deadGroundColor = new THREE.Color(0x4a3b2c); 
+        const aliveGroundColor = new THREE.Color(0x4ade80); 
+        
+        let gameActive = true;
+        const keys = { w: false, a: false, s: false, d: false };
+
+        window.onload = () => {
+            initThreeJS();
+            generateTrash(); 
+            setupControls();
+            setupMouseInteraction(); 
+            updateStats();
+        };
+
+        function updateStats() {
+            const fullTrees = treesData.filter(t => t.stage >= 2).length;
+            const remainingTrash = trashMeshes.length;
+
+            document.getElementById('tree-counter').innerText = `🌳 أشجار: ${fullTrees}/${targetTrees}`;
+            document.getElementById('trash-counter').innerText = `🗑️ متبقي: ${remainingTrash}`;
+
+            const treeRatio = Math.min(fullTrees / targetTrees, 1);
+            const trashRatio = 1 - (remainingTrash / initialTrash);
+            const envRatio = (treeRatio * 0.6) + (trashRatio * 0.4); 
+
+            scene.background.lerpColors(deadSkyColor, aliveSkyColor, envRatio);
+            scene.fog.color.lerpColors(deadSkyColor, aliveSkyColor, envRatio);
+            groundMat.color.lerpColors(deadGroundColor, aliveGroundColor, envRatio);
+
+            if (fullTrees >= targetTrees && remainingTrash === 0 && gameActive) {
+                levelComplete();
+            }
+        }
+
+        function levelComplete() {
+            gameActive = false;
+            const modal = document.getElementById('result-modal');
+            const title = document.getElementById('result-title');
+            const desc = document.getElementById('result-desc');
+            const btn = document.getElementById('result-btn');
+
+            fireConfetti();
+
+            if (currentLevel < MAX_LEVELS) {
+                title.innerText = `🎉 مبروك! أنهيت المستوى ${currentLevel}`;
+                desc.innerText = "لقد أنقذت هذه المنطقة. هل أنت مستعد لتحدي أصعب في المنطقة التالية؟";
+                btn.innerText = "المستوى التالي ➡️";
+                btn.onclick = () => loadLevel(currentLevel + 1);
+            } else {
+                title.innerText = "🏆 بطل البيئة العظيم!";
+                title.className = "text-4xl font-extrabold mb-4 text-blue-600";
+                desc.innerText = "لقد أنهيت جميع المستويات الثلاثة وأنقذت الكوكب بالكامل من الدمار! شكراً لك!";
+                btn.innerText = "العب من البداية 🔄";
+                btn.onclick = () => location.reload();
+            }
+
+            modal.classList.add('active');
+        }
+
+        function loadLevel(level) {
+            currentLevel = level;
+            targetTrees = levelsConfig[level-1].trees;
+            initialTrash = levelsConfig[level-1].trash;
+            
+            document.getElementById('level-badge').innerText = `المستوى ${currentLevel}`;
+            document.getElementById('result-modal').classList.remove('active');
+
+            // تنظيف المشهد من المستوى السابق
+            treesData = [];
+            treeMeshes.forEach(t => scene.remove(t.mesh));
+            treeMeshes = [];
+            
+            trashMeshes.forEach(t => scene.remove(t));
+            trashMeshes = [];
+            
+            soilMeshes.forEach(s => scene.remove(s.mesh));
+            soilMeshes = [];
+
+            // إعادة اللاعب لنقطة البداية
+            playerGroup.position.set(0, 0, 0);
+            playerGroup.rotation.y = 0;
+
+            // إعادة ألوان الدمار للمنطقة الجديدة
+            scene.background = deadSkyColor.clone();
+            scene.fog.color = deadSkyColor.clone();
+            groundMat.color = deadGroundColor.clone();
+
+            generateTrash();
+            gameActive = true;
+            updateStats();
+        }
+
+        function initThreeJS() {
+            const container = document.getElementById('canvas-container');
+            
+            scene = new THREE.Scene();
+            scene.background = deadSkyColor.clone();
+            scene.fog = new THREE.Fog(deadSkyColor.clone(), 8, 30);
+
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+            
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            container.appendChild(renderer.domElement);
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight.position.set(10, 20, 10);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.width = 1024;
+            dirLight.shadow.mapSize.height = 1024;
+            scene.add(dirLight);
+
+            const groundGeo = new THREE.PlaneGeometry(100, 100);
+            groundMat = new THREE.MeshStandardMaterial({ color: deadGroundColor.clone(), roughness: 1 });
+            const ground = new THREE.Mesh(groundGeo, groundMat);
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            scene.add(ground);
+
+            createPlayer();
+
+            const markerGeo = new THREE.RingGeometry(0.3, 0.4, 16);
+            const markerMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8, side: THREE.DoubleSide });
+            targetMarker = new THREE.Mesh(markerGeo, markerMat);
+            targetMarker.rotation.x = -Math.PI / 2;
+            targetMarker.position.y = 0.05;
+            scene.add(targetMarker);
+
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+
+            animate();
+        }
+
+        function createPlayer() {
+            playerGroup = new THREE.Group();
+            
+            const bodyGeo = new THREE.CylinderGeometry(0.3, 0.4, 0.8, 16);
+            const bodyMat = new THREE.MeshStandardMaterial({ color: 0x3b82f6 });
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+            body.position.y = 0.4;
+            body.castShadow = true;
+            playerGroup.add(body);
+
+            const headGeo = new THREE.SphereGeometry(0.35, 16, 16);
+            const headMat = new THREE.MeshStandardMaterial({ color: 0xffedd5 });
+            const head = new THREE.Mesh(headGeo, headMat);
+            head.position.y = 1.1;
+            head.castShadow = true;
+            playerGroup.add(head);
+
+            const hatGeo = new THREE.CylinderGeometry(0.2, 0.36, 0.2, 16);
+            const hatMat = new THREE.MeshStandardMaterial({ color: 0xeab308 });
+            const hat = new THREE.Mesh(hatGeo, hatMat);
+            hat.position.y = 1.4;
+            hat.castShadow = true;
+            playerGroup.add(hat);
+
+            const eyeGeo = new THREE.SphereGeometry(0.05, 8, 8);
+            const eyeMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+            const eyeR = new THREE.Mesh(eyeGeo, eyeMat);
+            eyeR.position.set(0.15, 1.15, 0.3);
+            const eyeL = new THREE.Mesh(eyeGeo, eyeMat);
+            eyeL.position.set(-0.15, 1.15, 0.3);
+            playerGroup.add(eyeR, eyeL);
+
+            scene.add(playerGroup);
+        }
+
+        function generateTrash() {
+            const trashMats = [
+                new THREE.MeshStandardMaterial({ color: 0x8b5a2b, roughness: 0.9 }), 
+                new THREE.MeshStandardMaterial({ color: 0xcc0000, roughness: 0.3, metalness: 0.6 }), 
+                new THREE.MeshStandardMaterial({ color: 0xdddddd, roughness: 1.0 }) 
+            ];
+            const geos = [
+                new THREE.BoxGeometry(0.5, 0.4, 0.5), 
+                new THREE.CylinderGeometry(0.15, 0.15, 0.4, 16), 
+                new THREE.DodecahedronGeometry(0.25) 
+            ];
+
+            for(let i=0; i<initialTrash; i++) {
+                const type = Math.floor(Math.random() * 3);
+                const trash = new THREE.Mesh(geos[type], trashMats[type]);
+                
+                const angle = Math.random() * Math.PI * 2;
+                const radius = 3 + Math.random() * 15;
+                trash.position.set(Math.cos(angle)*radius, 0.2, Math.sin(angle)*radius);
+                
+                if (type === 1) trash.rotation.set(Math.PI/2, Math.random()*Math.PI, 0);
+                else trash.rotation.set(Math.random()*Math.PI, Math.random()*Math.PI, 0);
+                
+                trash.castShadow = true;
+                scene.add(trash);
+                trashMeshes.push(trash);
+            }
+        }
+
+        function setupMouseInteraction() {
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2();
+
+            window.addEventListener('pointerdown', (event) => {
+                if (!gameActive) return;
+                
+                mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+                mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+                raycaster.setFromCamera(mouse, camera);
+
+                const intersects = raycaster.intersectObjects(trashMeshes);
+                
+                if (intersects.length > 0) {
+                    const clickedTrash = intersects[0].object;
+                    const index = trashMeshes.indexOf(clickedTrash);
+                    
+                    if (index > -1) {
+                        scene.remove(clickedTrash);
+                        trashMeshes.splice(index, 1);
+                        playSound('clean');
+                        updateStats();
+                    }
+                }
+            });
+        }
+
+        function createTreeMesh(stage, type) {
+            const group = new THREE.Group();
+            const trunkMat = new THREE.MeshStandardMaterial({ color: 0x8B5A2B, roughness: 0.9 });
+            const leafMat = new THREE.MeshStandardMaterial({ color: 0x2ecc71, roughness: 0.8 });
+            
+            if (stage === 0) {
+                const dirt = new THREE.Mesh(new THREE.SphereGeometry(0.25, 16, 16), trunkMat);
+                dirt.scale.set(1, 0.3, 1);
+                dirt.position.y = 0.1;
+                group.add(dirt);
+            } 
+            else if (stage === 1) {
+                const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.5), trunkMat);
+                trunk.position.y = 0.25;
+                const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.3, 16, 16), leafMat);
+                leaf.position.y = 0.6;
+                group.add(trunk, leaf);
+            }
+            else if (stage >= 2) {
+                if (type === 0) { 
+                    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.3, 1.5), trunkMat);
+                    trunk.position.y = 0.75;
+                    group.add(trunk);
+
+                    const leaves = [[0, 2.0, 0, 1.0], [-0.6, 1.6, 0.3, 0.8], [0.6, 1.6, -0.3, 0.8], [0, 1.5, 0.8, 0.7], [0, 1.5, -0.8, 0.7]];
+                    leaves.forEach(pos => {
+                        const leaf = new THREE.Mesh(new THREE.SphereGeometry(pos[3], 16, 16), leafMat);
+                        leaf.position.set(pos[0], pos[1], pos[2]);
+                        group.add(leaf);
+                    });
+
+                    if (stage === 3) {
+                        const appleMat = new THREE.MeshStandardMaterial({ color: 0xe74c3c });
+                        for(let i=0; i<6; i++) {
+                            const apple = new THREE.Mesh(new THREE.SphereGeometry(0.15, 8, 8), appleMat);
+                            const angle = (i / 6) * Math.PI * 2;
+                            apple.position.set(Math.cos(angle)*0.9, 1.8 + Math.random()*0.5, Math.sin(angle)*0.9);
+                            group.add(apple);
+                        }
+                    }
+                } 
+                else if (type === 1) { 
+                    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.3, 1.5), trunkMat);
+                    trunk.position.y = 0.75;
+                    group.add(trunk);
+                    
+                    const leafMatPine = new THREE.MeshStandardMaterial({ color: 0x1e824c, roughness: 0.9 });
+                    
+                    const level1 = new THREE.Mesh(new THREE.ConeGeometry(1.2, 1.8, 16), leafMatPine);
+                    level1.position.y = 1.6;
+                    group.add(level1);
+                    
+                    const level2 = new THREE.Mesh(new THREE.ConeGeometry(1.0, 1.5, 16), leafMatPine);
+                    level2.position.y = 2.4;
+                    group.add(level2);
+                    
+                    const level3 = new THREE.Mesh(new THREE.ConeGeometry(0.7, 1.2, 16), leafMatPine);
+                    level3.position.y = 3.2;
+                    group.add(level3);
+                } 
+                else if (type === 2) { 
+                    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.3, 1.2), trunkMat);
+                    trunk.position.y = 0.6;
+                    group.add(trunk);
+
+                    const leaf = new THREE.Mesh(new THREE.SphereGeometry(1.4, 16, 16), leafMat);
+                    leaf.position.y = 1.8;
+                    group.add(leaf);
+
+                    if (stage === 3) {
+                        const orangeMat = new THREE.MeshStandardMaterial({ color: 0xff8c00 });
+                        for(let i=0; i<8; i++) {
+                            const orange = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 8), orangeMat);
+                            const angle = (i / 8) * Math.PI * 2;
+                            orange.position.set(Math.cos(angle)*1.3, 1.6 + Math.sin(angle)*0.6, Math.sin(angle)*1.3);
+                            group.add(orange);
+                        }
+                    }
+                }
+            }
+            
+            group.traverse(child => { if(child.isMesh) child.castShadow = true; });
+            group.userData.targetScale = 1;
+            group.userData.currentScale = 0.1; 
+            group.scale.set(0.1, 0.1, 0.1);
+            return group;
+        }
+
+        function useTool(tool) {
+            if (!gameActive) return;
+
+            const actionDist = 1.5;
+            const actionX = playerGroup.position.x + Math.sin(playerGroup.rotation.y) * actionDist;
+            const actionZ = playerGroup.position.z + Math.cos(playerGroup.rotation.y) * actionDist;
+
+            if (tool === 'clean') {
+                let cleaned = false;
+                for (let i = trashMeshes.length - 1; i >= 0; i--) {
+                    const trash = trashMeshes[i];
+                    if (Math.hypot(trash.position.x - actionX, trash.position.z - actionZ) < 1.5) {
+                        scene.remove(trash);
+                        trashMeshes.splice(i, 1);
+                        cleaned = true;
+                    }
+                }
+                if (cleaned) {
+                    playSound('clean');
+                    targetMarker.scale.set(1.5, 1.5, 1.5); 
+                    updateStats();
+                } else {
+                    showAlert("مفيش قمامة هنا، أو تقدر تضغط عليها بالماوس!");
+                }
+                return;
+            }
+
+            if (tool === 'dig') {
+                playSound('dig');
+                // تغيير الدائرة للون الطين (البني الغامق)
+                const soilGeo = new THREE.CircleGeometry(0.7, 16);
+                const soilMat = new THREE.MeshBasicMaterial({ color: 0x3e2723 }); // لون التربة المحروثة
+                const soil = new THREE.Mesh(soilGeo, soilMat);
+                soil.rotation.x = -Math.PI / 2;
+                soil.position.set(actionX, 0.02, actionZ); 
+                scene.add(soil);
+                soilMeshes.push({ x: actionX, z: actionZ, mesh: soil });
+                targetMarker.scale.set(1.5, 1.5, 1.5);
+                return;
+            }
+
+            let closestTreeObj = null;
+            let minDist = 1.2;
+            treeMeshes.forEach(tObj => {
+                const dist = Math.hypot(tObj.data.x - actionX, tObj.data.z - actionZ);
+                if (dist < minDist) { minDist = dist; closestTreeObj = tObj; }
+            });
+
+            if (tool === 'plant') {
+                if (closestTreeObj) {
+                    showAlert("المكان ده مزروع بالفعل!");
+                    return;
+                }
+
+                let nearSoil = false;
+                for (let s of soilMeshes) {
+                    if (Math.hypot(s.x - actionX, s.z - actionZ) < 1.0) {
+                        nearSoil = true; break;
+                    }
+                }
+
+                if (!nearSoil) {
+                    showAlert("يجب حرث الأرض (طين) أولاً لتتمكن من الزراعة!");
+                    return;
+                }
+
+                playSound('plant');
+                const randomTreeType = Math.floor(Math.random() * 3);
+                
+                const newTreeData = { id: Date.now(), x: actionX, z: actionZ, stage: 0, progress: 0, type: randomTreeType };
+                treesData.push(newTreeData);
+                
+                const newMesh = createTreeMesh(0, randomTreeType);
+                newMesh.position.set(actionX, 0, actionZ);
+                scene.add(newMesh);
+                treeMeshes.push({ data: newTreeData, mesh: newMesh });
+                
+                targetMarker.scale.set(1.5, 1.5, 1.5);
+                updateStats();
+            } 
+            
+            else if (tool === 'water') {
+                if (closestTreeObj && closestTreeObj.data.stage < 3) {
+                    playSound('water');
+                    closestTreeObj.data.progress += 34; 
+                    closestTreeObj.mesh.scale.set(1.2, 1.2, 1.2);
+
+                    if (closestTreeObj.data.progress >= 100) {
+                        closestTreeObj.data.progress = 0;
+                        closestTreeObj.data.stage += 1;
+                        playSound('levelUp');
+
+                        scene.remove(closestTreeObj.mesh);
+                        const newMesh = createTreeMesh(closestTreeObj.data.stage, closestTreeObj.data.type);
+                        newMesh.position.set(closestTreeObj.data.x, 0, closestTreeObj.data.z);
+                        scene.add(newMesh);
+                        closestTreeObj.mesh = newMesh;
+                        
+                        updateStats();
+                    }
+                } else if (!closestTreeObj) {
+                    showAlert("إزرع بذرة هنا أولاً لتسقيها!");
+                }
+            }
+        }
+
+        function setupControls() {
+            window.addEventListener('keydown', (e) => {
+                if(!gameActive) return;
+                if(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) e.preventDefault();
+
+                if(e.key === 'w' || e.key === 'ArrowUp') keys.w = true;
+                if(e.key === 's' || e.key === 'ArrowDown') keys.s = true;
+                if(e.key === 'a' || e.key === 'ArrowLeft') keys.a = true;
+                if(e.key === 'd' || e.key === 'ArrowRight') keys.d = true;
+                
+                if(e.key === 'c' || e.key === 'C') useTool('clean'); 
+                if(e.key === 'x' || e.key === 'X') useTool('dig'); 
+                if(e.key === 'z' || e.key === 'Z') useTool('plant'); 
+                if(e.key === ' ') useTool('water'); 
+            });
+
+            window.addEventListener('keyup', (e) => {
+                if(e.key === 'w' || e.key === 'ArrowUp') keys.w = false;
+                if(e.key === 's' || e.key === 'ArrowDown') keys.s = false;
+                if(e.key === 'a' || e.key === 'ArrowLeft') keys.a = false;
+                if(e.key === 'd' || e.key === 'ArrowRight') keys.d = false;
+            });
+
+            const bindBtn = (id, keyName) => {
+                const btn = document.getElementById(id);
+                btn.addEventListener('touchstart', (e) => { e.preventDefault(); keys[keyName] = true; });
+                btn.addEventListener('touchend', (e) => { e.preventDefault(); keys[keyName] = false; });
+                btn.addEventListener('mousedown', (e) => { keys[keyName] = true; });
+                btn.addEventListener('mouseup', (e) => { keys[keyName] = false; });
+                btn.addEventListener('mouseleave', (e) => { keys[keyName] = false; });
+            };
+            bindBtn('btn-up', 'w'); bindBtn('btn-down', 's');
+            bindBtn('btn-left', 'a'); bindBtn('btn-right', 'd');
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (gameActive) {
+                const speed = 0.15;
+                let isMoving = false;
+                let moveX = 0; let moveZ = 0;
+
+                if (keys.w) { moveZ -= speed; isMoving = true; }
+                if (keys.s) { moveZ += speed; isMoving = true; }
+                if (keys.a) { moveX -= speed; isMoving = true; }
+                if (keys.d) { moveX += speed; isMoving = true; }
+
+                if (isMoving) {
+                    playerGroup.position.x += moveX;
+                    playerGroup.position.z += moveZ;
+                    
+                    const targetRotation = Math.atan2(moveX, moveZ);
+                    const currentRotation = playerGroup.rotation.y;
+                    let diff = targetRotation - currentRotation;
+                    while (diff < -Math.PI) diff += Math.PI * 2;
+                    while (diff > Math.PI) diff -= Math.PI * 2;
+                    playerGroup.rotation.y += diff * 0.2;
+
+                    playerGroup.position.y = Math.abs(Math.sin(Date.now() * 0.01)) * 0.2;
+                } else {
+                    playerGroup.position.y += (0 - playerGroup.position.y) * 0.2;
+                }
+
+                const actionDist = 1.5;
+                targetMarker.position.x = playerGroup.position.x + Math.sin(playerGroup.rotation.y) * actionDist;
+                targetMarker.position.z = playerGroup.position.z + Math.cos(playerGroup.rotation.y) * actionDist;
+                if (targetMarker.scale.x > 1) {
+                    targetMarker.scale.x -= 0.05; targetMarker.scale.y -= 0.05; targetMarker.scale.z -= 0.05;
+                }
+            }
+
+            const camTargetX = playerGroup.position.x;
+            const camTargetZ = playerGroup.position.z + 14; 
+            const camTargetY = 10; 
+            camera.position.x += (camTargetX - camera.position.x) * 0.1;
+            camera.position.z += (camTargetZ - camera.position.z) * 0.1;
+            camera.position.y += (camTargetY - camera.position.y) * 0.1;
+            camera.lookAt(playerGroup.position.x, 0, playerGroup.position.z);
+
+            treeMeshes.forEach(tObj => {
+                const mesh = tObj.mesh;
+                if (mesh.userData.currentScale < mesh.userData.targetScale) {
+                    mesh.userData.currentScale += (mesh.userData.targetScale - mesh.userData.currentScale) * 0.1;
+                    mesh.scale.set(mesh.userData.currentScale, mesh.userData.currentScale, mesh.userData.currentScale);
+                } else if (mesh.scale.x > mesh.userData.targetScale) {
+                    mesh.scale.x += (mesh.userData.targetScale - mesh.scale.x) * 0.1;
+                    mesh.scale.y += (mesh.userData.targetScale - mesh.scale.y) * 0.1;
+                    mesh.scale.z += (mesh.userData.targetScale - mesh.scale.z) * 0.1;
+                }
+            });
+
+            renderer.render(scene, camera);
+        }
+
+        function fireConfetti() {
+            var duration = 5 * 1000;
+            var animationEnd = Date.now() + duration;
+            var defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 100 };
+            function randomInRange(min, max) { return Math.random() * (max - min) + min; }
+            var interval = setInterval(function() {
+                var timeLeft = animationEnd - Date.now();
+                if (timeLeft <= 0) return clearInterval(interval);
+                var particleCount = 60 * (timeLeft / duration);
+                confetti(Object.assign({}, defaults, { particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } }));
+                confetti(Object.assign({}, defaults, { particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } }));
+            }, 250);
+        }
+    </script>
+</body>
+</html>
